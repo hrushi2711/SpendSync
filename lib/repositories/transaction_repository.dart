@@ -90,8 +90,18 @@ class TransactionRepository extends ChangeNotifier {
     }).toList();
   }
 
-  /// Import transactions from a list of maps for the given userId.
+  /// Import transactions from a list of maps for the given userId (overrides existing).
   Future<void> importForUser(int userId, List<dynamic> data) async {
+    // 1. Wipe current existing records for this user
+    final existingKeys = _box.keys.where((k) {
+      final item = _box.get(k);
+      return item != null && item.userId == userId;
+    }).toList();
+    if (existingKeys.isNotEmpty) {
+      await _box.deleteAll(existingKeys);
+    }
+
+    // 2. Insert imported records
     for (final item in data) {
       final map = item as Map<String, dynamic>;
       final tx = TransactionModel(

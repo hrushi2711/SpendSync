@@ -12,6 +12,17 @@ class UserRepository extends ChangeNotifier {
 
   Future<void> init() async {
     _box = await Hive.openBox<UserModel>(_boxName);
+
+    // Seed default admin account if not exists
+    if (getByUsername('admin') == null) {
+      final admin = UserModel(
+        id: _nextId(),
+        username: 'admin',
+        passwordHash: _hashPassword('Admin123'),
+        createdAt: DateTime.now(),
+      );
+      await _box.add(admin);
+    }
   }
 
   int _nextId() {

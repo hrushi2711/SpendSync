@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import '../theme/theme_provider.dart';
 import 'dart:io';
@@ -11,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../providers/auth_provider.dart';
 import '../repositories/card_repository.dart';
 import '../repositories/transaction_repository.dart';
+import '../utils/export_utils.dart';
 
 class FeaturesScreen extends StatefulWidget {
   const FeaturesScreen({super.key});
@@ -39,35 +39,29 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
 
       final jsonStr = jsonEncode(data);
       
-      ShareResult result;
       if (kIsWeb) {
-        final bytes = utf8.encode(jsonStr);
-        final xfile = XFile.fromData(
-          Uint8List.fromList(bytes),
-          mimeType: 'application/json',
-          name: 'spendsync_export.json',
-        );
-        result = await Share.shareXFiles(
-          [xfile],
-          subject: 'SpendSync Database Export',
+        downloadJson(jsonStr);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Download started successfully!')),
         );
       } else {
         // Save temporarily and share on mobile
         final dir = await getTemporaryDirectory();
         final file = File('${dir.path}/spendsync_export.json');
         await file.writeAsString(jsonStr);
-        result = await Share.shareXFiles(
+        
+        if (!mounted) return;
+        final result = await Share.shareXFiles(
           [XFile(file.path)],
           subject: 'SpendSync Database Export',
         );
-      }
-      
-      if (!mounted) return;
-      
-      if (result.status == ShareResultStatus.success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Export successful!')),
-        );
+        
+        if (result.status == ShareResultStatus.success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Export successful!')),
+          );
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -83,55 +77,109 @@ class _FeaturesScreenState extends State<FeaturesScreen> {
   }
 
   Future<void> _importData() async {
-    setState(() => _isLoading = true);
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         withData: true,
       );
 
-      if (result != null && result.files.isNotEmpty) {
-        final bytes = result.files.first.bytes;
-        final path = result.files.first.path;
-        
-        String jsonStr;
-        if (bytes != null) {
-          jsonStr = utf8.decode(bytes);
-        } else if (path != null) {
-          final file = File(path);
-          jsonStr = await file.readAsString();
-        } else {
-          throw Exception('Could not read file contents');
-        }
-
-        final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-        
-        if (!mounted) return;
-        final auth = context.read<AuthProvider>();
-        final cardRepo = context.read<CardRepository>();
-        final txRepo = context.read<TransactionRepository>();
-        final userId = auth.currentUserId;
-
-        if (data.containsKey('cards')) {
-          await cardRepo.importForUser(userId, data['cards'] as List);
-        }
-        if (data.containsKey('transactions')) {
-          await txRepo.importForUser(userId, data['transactions'] as List);
-        }
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Database imported successfully!'),
-            backgroundColor: Colors.green,
+      if (result == null || result.files.isEmpty) return;
+      
+      if (!mounted) return;
+      
+      // Prompt user with a warning before overriding database
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Override Database?'),
+          content: const Text(
+            'Warning: Are you sure you want to import this database?\n\n'
+            'This will permanently overwrite your current cards and expenses '
+            'for this account. Any recent entries will be lost!\n\n'
+            'Note: We strongly recommend selecting "Cancel" and creating an Export backup first.',
           ),
-        );
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(
+                'Import & Override',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm != true) return;
+
+      if (!mounted) return;
+      setState(() => _isLoading = true);
+
+      final bytes = result.files.first.bytes;
+      
+      String jsonStr;
+      if (bytes != null) {
+        // Strip UTF-8 BOM if present (EF BB BF)
+        final stripped = (bytes.length >= 3 &&
+                bytes[0] == 0xEF &&
+                bytes[1] == 0xBB &&
+                bytes[2] == 0xBF)
+            ? bytes.sublist(3)
+            : bytes;
+        jsonStr = utf8.decode(stripped).trim();
+      } else if (!kIsWeb) {
+        // On mobile/desktop, fall back to reading from file path
+        final filePath = result.files.first.path;
+        if (filePath == null) throw Exception('Could not read file contents');
+        final file = File(filePath);
+        jsonStr = (await file.readAsString()).trim();
+      } else {
+        throw Exception('Could not read file contents — no bytes available');
       }
-    } catch (e) {
+
+      // Safe decode — avoid hard cast that throws TypeError
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is! Map<String, dynamic>) {
+        throw FormatException('Root must be a JSON object');
+      }
+      final data = decoded;
+
+      if (!data.containsKey('cards') || !data.containsKey('transactions')) {
+        throw FormatException(
+            'Missing required keys. Found: ${data.keys.toList()}');
+      }
+      final cards = data['cards'];
+      final transactions = data['transactions'];
+      if (cards is! List || transactions is! List) {
+        throw FormatException('cards and transactions must be arrays');
+      }
+
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      final cardRepo = context.read<CardRepository>();
+      final txRepo = context.read<TransactionRepository>();
+      final userId = auth.currentUserId;
+
+      await cardRepo.importForUser(userId, cards);
+      await txRepo.importForUser(userId, transactions);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Database imported successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e, stack) {
+      debugPrint('Import error: $e\n$stack');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Import failed or invalid file format'),
+          content: Text('Import failed: $e'),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
