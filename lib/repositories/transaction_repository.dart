@@ -8,6 +8,10 @@ class TransactionRepository extends ChangeNotifier {
 
   List<TransactionModel> get transactions => _box.values.toList();
 
+  /// Returns only transactions belonging to the given user.
+  List<TransactionModel> getByUserId(int userId) =>
+      _box.values.where((t) => t.userId == userId).toList();
+
   Future<void> init() async {
     _box = await Hive.openBox<TransactionModel>(_boxName);
   }
@@ -33,6 +37,7 @@ class TransactionRepository extends ChangeNotifier {
     required double amount,
     required String paymentMode,
     String? notes,
+    required int userId,
   }) async {
     final tx = TransactionModel(
       id: _nextId(),
@@ -43,6 +48,7 @@ class TransactionRepository extends ChangeNotifier {
       amount: amount,
       paymentMode: paymentMode,
       notes: notes,
+      userId: userId,
     );
     await _box.add(tx);
     notifyListeners();
@@ -56,6 +62,51 @@ class TransactionRepository extends ChangeNotifier {
 
   Future<void> delete(TransactionModel tx) async {
     await tx.delete();
+    notifyListeners();
+  }
+
+  /// Migrate legacy data (userId == 0) to the given userId.
+  Future<void> migrateOrphanedData(int userId) async {
+    for (final tx in _box.values) {
+      if (tx.userId == 0) {
+        tx.userId = userId;
+        await tx.save();
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Export all transactions for a user as a list of maps.
+  List<Map<String, dynamic>> exportForUser(int userId) {
+    return getByUserId(userId).map((t) => {
+      'id': t.id,
+      'cardId': t.cardId,
+      'date': t.date.toIso8601String(),
+      'description': t.description,
+      'category': t.category,
+      'amount': t.amount,
+      'paymentMode': t.paymentMode,
+      'notes': t.notes,
+    }).toList();
+  }
+
+  /// Import transactions from a list of maps for the given userId.
+  Future<void> importForUser(int userId, List<dynamic> data) async {
+    for (final item in data) {
+      final map = item as Map<String, dynamic>;
+      final tx = TransactionModel(
+        id: _nextId(),
+        cardId: map['cardId'] as int?,
+        date: DateTime.parse(map['date'] as String),
+        description: map['description'] as String,
+        category: map['category'] as String,
+        amount: (map['amount'] as num).toDouble(),
+        paymentMode: map['paymentMode'] as String,
+        notes: map['notes'] as String?,
+        userId: userId,
+      );
+      await _box.add(tx);
+    }
     notifyListeners();
   }
 }

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../repositories/card_repository.dart';
 import '../repositories/transaction_repository.dart';
+import '../providers/auth_provider.dart';
 import '../utils/categories.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -11,8 +12,9 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final userId = context.watch<AuthProvider>().currentUserId;
     final txRepo = context.watch<TransactionRepository>();
-    final transactions = txRepo.transactions;
+    final transactions = txRepo.getByUserId(userId);
     final colorScheme = Theme.of(context).colorScheme;
     final currencyFormat =
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
@@ -207,8 +209,7 @@ class DashboardScreen extends StatelessWidget {
                     child: Center(
                       child: Text(
                         'No expense data yet',
-                        style:
-                            TextStyle(color: colorScheme.onSurfaceVariant),
+                        style: TextStyle(color: colorScheme.onSurfaceVariant),
                       ),
                     ),
                   )
@@ -258,8 +259,7 @@ class DashboardScreen extends StatelessWidget {
                                       height: 10,
                                       decoration: BoxDecoration(
                                         color: getCategoryColor(e.key),
-                                        borderRadius:
-                                            BorderRadius.circular(3),
+                                        borderRadius: BorderRadius.circular(3),
                                       ),
                                     ),
                                     const SizedBox(width: 8),
@@ -305,8 +305,7 @@ class DashboardScreen extends StatelessWidget {
                     child: Center(
                       child: Text(
                         'No monthly data yet',
-                        style:
-                            TextStyle(color: colorScheme.onSurfaceVariant),
+                        style: TextStyle(color: colorScheme.onSurfaceVariant),
                       ),
                     ),
                   )
@@ -322,8 +321,7 @@ class DashboardScreen extends StatelessWidget {
                             1.2,
                         barTouchData: BarTouchData(
                           touchTooltipData: BarTouchTooltipData(
-                            getTooltipItem: (group, groupIndex, rod,
-                                rodIndex) {
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
                               return BarTooltipItem(
                                 currencyFormat.format(rod.toY),
                                 TextStyle(
@@ -356,8 +354,9 @@ class DashboardScreen extends StatelessWidget {
                               showTitles: true,
                               getTitlesWidget: (value, meta) {
                                 final idx = value.toInt();
-                                if (idx < 0 || idx >= sortedMonths.length)
+                                if (idx < 0 || idx >= sortedMonths.length) {
                                   return const SizedBox.shrink();
+                                }
                                 final label = sortedMonths[idx].key;
                                 return Padding(
                                   padding: const EdgeInsets.only(top: 8),
@@ -382,8 +381,7 @@ class DashboardScreen extends StatelessWidget {
                           drawVerticalLine: false,
                           horizontalInterval: null,
                           getDrawingHorizontalLine: (value) => FlLine(
-                            color:
-                                colorScheme.outlineVariant.withOpacity(0.3),
+                            color: colorScheme.outlineVariant.withOpacity(0.3),
                             strokeWidth: 1,
                             dashArray: [5, 5],
                           ),

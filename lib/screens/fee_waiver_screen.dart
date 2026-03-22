@@ -4,15 +4,17 @@ import 'package:provider/provider.dart';
 import '../models/card_model.dart';
 import '../repositories/card_repository.dart';
 import '../repositories/transaction_repository.dart';
+import '../providers/auth_provider.dart';
 
 class FeeWaiverScreen extends StatelessWidget {
   const FeeWaiverScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final userId = context.watch<AuthProvider>().currentUserId;
     final cardRepo = context.watch<CardRepository>();
     final txRepo = context.watch<TransactionRepository>();
-    final cards = cardRepo.cards;
+    final cards = cardRepo.getByUserId(userId);
     final colorScheme = Theme.of(context).colorScheme;
     final currencyFormat =
         NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
@@ -81,7 +83,7 @@ class FeeWaiverScreen extends StatelessWidget {
                 }
 
                 final card = cards[index - 1];
-                final currentSpend = _calculateSpend(card, txRepo);
+                final currentSpend = _calculateSpend(card, txRepo, userId);
                 final threshold = card.waiverThreshold;
                 final progress =
                     threshold > 0 ? (currentSpend / threshold).clamp(0.0, 1.0) : 0.0;
@@ -366,8 +368,8 @@ class FeeWaiverScreen extends StatelessWidget {
     );
   }
 
-  double _calculateSpend(CardModel card, TransactionRepository txRepo) {
-    return txRepo.transactions
+  double _calculateSpend(CardModel card, TransactionRepository txRepo, int userId) {
+    return txRepo.getByUserId(userId)
         .where((tx) => tx.cardId == card.id)
         .where((tx) =>
             !tx.date.isBefore(card.cycleStart) &&
@@ -486,12 +488,14 @@ class _CardFormSheetState extends State<_CardFormSheet> {
       card.cycleEnd = _cycleEnd;
       cardRepo.update(card);
     } else {
+      final userId = context.read<AuthProvider>().currentUserId;
       cardRepo.create(
         name: _nameCtrl.text.trim(),
         annualFee: double.tryParse(_feeCtrl.text) ?? 0,
         waiverThreshold: double.tryParse(_thresholdCtrl.text) ?? 0,
         cycleStart: _cycleStart,
         cycleEnd: _cycleEnd,
+        userId: userId,
       );
     }
 
@@ -547,8 +551,10 @@ class _CardFormSheetState extends State<_CardFormSheet> {
 
               TextFormField(
                 controller: _nameCtrl,
-                decoration:
-                    const InputDecoration(labelText: 'Card Name'),
+                decoration: const InputDecoration(
+                  labelText: 'Card Name',
+                  prefixIcon: Icon(Icons.credit_card_rounded),
+                ),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
@@ -559,8 +565,10 @@ class _CardFormSheetState extends State<_CardFormSheet> {
                   Expanded(
                     child: TextFormField(
                       controller: _feeCtrl,
-                      decoration:
-                          const InputDecoration(labelText: 'Annual Fee (₹)'),
+                      decoration: const InputDecoration(
+                        labelText: 'Annual Fee (₹)',
+                        prefixIcon: Icon(Icons.attach_money_rounded),
+                      ),
                       keyboardType: TextInputType.number,
                       validator: (v) =>
                           (v == null || v.isEmpty) ? 'Required' : null,
@@ -571,7 +579,9 @@ class _CardFormSheetState extends State<_CardFormSheet> {
                     child: TextFormField(
                       controller: _thresholdCtrl,
                       decoration: const InputDecoration(
-                          labelText: 'Waiver Target (₹)'),
+                        labelText: 'Waiver Target (₹)',
+                        prefixIcon: Icon(Icons.track_changes_rounded),
+                      ),
                       keyboardType: TextInputType.number,
                       validator: (v) =>
                           (v == null || v.isEmpty) ? 'Required' : null,
@@ -588,8 +598,10 @@ class _CardFormSheetState extends State<_CardFormSheet> {
                       onTap: () => _pickDate(true),
                       borderRadius: BorderRadius.circular(14),
                       child: InputDecorator(
-                        decoration:
-                            const InputDecoration(labelText: 'Cycle Start'),
+                        decoration: const InputDecoration(
+                          labelText: 'Cycle Start',
+                          prefixIcon: Icon(Icons.calendar_month_rounded, size: 20),
+                        ),
                         child: Text(
                             DateFormat('yyyy-MM-dd').format(_cycleStart)),
                       ),
@@ -601,8 +613,10 @@ class _CardFormSheetState extends State<_CardFormSheet> {
                       onTap: () => _pickDate(false),
                       borderRadius: BorderRadius.circular(14),
                       child: InputDecorator(
-                        decoration:
-                            const InputDecoration(labelText: 'Cycle End'),
+                        decoration: const InputDecoration(
+                          labelText: 'Cycle End',
+                          prefixIcon: Icon(Icons.calendar_month_rounded, size: 20),
+                        ),
                         child: Text(
                             DateFormat('yyyy-MM-dd').format(_cycleEnd)),
                       ),

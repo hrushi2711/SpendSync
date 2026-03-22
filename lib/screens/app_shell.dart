@@ -4,6 +4,8 @@ import '../theme/theme_provider.dart';
 import 'dashboard_screen.dart';
 import 'expenses_screen.dart';
 import 'fee_waiver_screen.dart';
+import 'features_screen.dart';
+import 'support_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -19,6 +21,8 @@ class _AppShellState extends State<AppShell> {
     DashboardScreen(),
     ExpensesScreen(),
     FeeWaiverScreen(),
+    FeaturesScreen(),
+    SupportScreen(),
   ];
 
   @override
@@ -101,7 +105,17 @@ class _AppShellState extends State<AppShell> {
           NavigationDestination(
             icon: Icon(Icons.credit_card_outlined),
             selectedIcon: Icon(Icons.credit_card),
-            label: 'Fee Waivers',
+            label: 'Waivers',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: 'Features',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.help_outline),
+            selectedIcon: Icon(Icons.help),
+            label: 'Support',
           ),
         ],
       ),

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/transaction_model.dart';
 import '../repositories/card_repository.dart';
 import '../repositories/transaction_repository.dart';
+import '../providers/auth_provider.dart';
 import '../utils/categories.dart';
 
 class ExpensesScreen extends StatelessWidget {
@@ -11,9 +12,10 @@ class ExpensesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final userId = context.watch<AuthProvider>().currentUserId;
     final txRepo = context.watch<TransactionRepository>();
     final cardRepo = context.watch<CardRepository>();
-    final transactions = txRepo.transactions
+    final transactions = txRepo.getByUserId(userId)
       ..sort((a, b) => b.date.compareTo(a.date));
     final colorScheme = Theme.of(context).colorScheme;
     final currencyFormat =
@@ -197,18 +199,36 @@ class ExpensesScreen extends StatelessWidget {
                                           fontWeight: FontWeight.w800),
                                 ),
                                 const SizedBox(height: 4),
-                                InkWell(
-                                  onTap: () =>
-                                      _confirmDelete(context, txRepo, tx),
-                                  borderRadius:
-                                      BorderRadius.circular(8),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(4),
-                                    child: Icon(Icons.delete_outline,
-                                        size: 18,
-                                        color: colorScheme.error
-                                            .withOpacity(0.7)),
-                                  ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    InkWell(
+                                      onTap: () =>
+                                          _showFormSheet(context, tx),
+                                      borderRadius:
+                                          BorderRadius.circular(8),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(4),
+                                        child: Icon(Icons.edit_outlined,
+                                            size: 18,
+                                            color: colorScheme.onSurfaceVariant),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 2),
+                                    InkWell(
+                                      onTap: () =>
+                                          _confirmDelete(context, txRepo, tx),
+                                      borderRadius:
+                                          BorderRadius.circular(8),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(4),
+                                        child: Icon(Icons.delete_outline,
+                                            size: 18,
+                                            color: colorScheme.error
+                                                .withOpacity(0.7)),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -338,6 +358,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
       tx.notes = _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim();
       txRepo.update(tx);
     } else {
+      final userId = context.read<AuthProvider>().currentUserId;
       txRepo.create(
         description: _descCtrl.text.trim(),
         amount: amount,
@@ -347,6 +368,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
         cardId: _selectedCardId,
         notes:
             _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        userId: userId,
       );
     }
 
@@ -403,7 +425,10 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
               // Description
               TextFormField(
                 controller: _descCtrl,
-                decoration: const InputDecoration(labelText: 'Description'),
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  prefixIcon: Icon(Icons.edit_note_rounded),
+                ),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
@@ -432,7 +457,10 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
                       onTap: _pickDate,
                       borderRadius: BorderRadius.circular(14),
                       child: InputDecorator(
-                        decoration: const InputDecoration(labelText: 'Date'),
+                        decoration: const InputDecoration(
+                          labelText: 'Date',
+                          prefixIcon: Icon(Icons.calendar_today_rounded, size: 20),
+                        ),
                         child: Text(
                           DateFormat('yyyy-MM-dd').format(_selectedDate),
                         ),
@@ -449,8 +477,10 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       value: _selectedCategory,
-                      decoration:
-                          const InputDecoration(labelText: 'Category'),
+                      decoration: const InputDecoration(
+                        labelText: 'Category',
+                        prefixIcon: Icon(Icons.category_outlined, size: 20),
+                      ),
                       items: expenseCategories
                           .map((c) =>
                               DropdownMenuItem(value: c, child: Text(c)))
@@ -463,8 +493,10 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       value: _selectedPaymentMode,
-                      decoration:
-                          const InputDecoration(labelText: 'Payment Mode'),
+                      decoration: const InputDecoration(
+                        labelText: 'Payment Mode',
+                        prefixIcon: Icon(Icons.payment_rounded, size: 20),
+                      ),
                       items: paymentModes
                           .map((m) =>
                               DropdownMenuItem(value: m, child: Text(m)))
@@ -481,8 +513,10 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
               if (_selectedPaymentMode == 'Credit Card' && cards.isNotEmpty)
                 DropdownButtonFormField<int?>(
                   value: _selectedCardId,
-                  decoration:
-                      const InputDecoration(labelText: 'Credit Card (Optional)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Credit Card (Optional)',
+                    prefixIcon: Icon(Icons.credit_card_rounded),
+                  ),
                   items: [
                     const DropdownMenuItem<int?>(
                         value: null, child: Text('None / Not tracked')),
@@ -491,6 +525,16 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
                   ],
                   onChanged: (v) => setState(() => _selectedCardId = v),
                 ),
+              const SizedBox(height: 12),
+              
+              TextFormField(
+                controller: _notesCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Notes (Optional)',
+                  prefixIcon: Icon(Icons.notes_rounded),
+                ),
+                maxLines: 2,
+              ),
               const SizedBox(height: 20),
 
               // Buttons

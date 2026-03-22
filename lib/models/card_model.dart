@@ -22,6 +22,9 @@ class CardModel extends HiveObject {
   @HiveField(5)
   DateTime cycleEnd;
 
+  @HiveField(6)
+  int userId;
+
   CardModel({
     required this.id,
     required this.name,
@@ -29,5 +32,6 @@ class CardModel extends HiveObject {
     required this.waiverThreshold,
     required this.cycleStart,
     required this.cycleEnd,
+    this.userId = 0,
   });
 }

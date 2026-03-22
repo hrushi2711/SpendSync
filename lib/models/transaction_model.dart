@@ -28,6 +28,9 @@ class TransactionModel extends HiveObject {
   @HiveField(7)
   String? notes;
 
+  @HiveField(8)
+  int userId;
+
   TransactionModel({
     required this.id,
     this.cardId,
@@ -37,5 +40,6 @@ class TransactionModel extends HiveObject {
     required this.amount,
     required this.paymentMode,
     this.notes,
+    this.userId = 0,
   });
 }

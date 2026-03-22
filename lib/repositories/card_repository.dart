@@ -8,6 +8,10 @@ class CardRepository extends ChangeNotifier {
 
   List<CardModel> get cards => _box.values.toList();
 
+  /// Returns only cards belonging to the given user.
+  List<CardModel> getByUserId(int userId) =>
+      _box.values.where((c) => c.userId == userId).toList();
+
   Future<void> init() async {
     _box = await Hive.openBox<CardModel>(_boxName);
   }
@@ -31,6 +35,7 @@ class CardRepository extends ChangeNotifier {
     required double waiverThreshold,
     required DateTime cycleStart,
     required DateTime cycleEnd,
+    required int userId,
   }) async {
     final card = CardModel(
       id: _nextId(),
@@ -39,6 +44,7 @@ class CardRepository extends ChangeNotifier {
       waiverThreshold: waiverThreshold,
       cycleStart: cycleStart,
       cycleEnd: cycleEnd,
+      userId: userId,
     );
     await _box.add(card);
     notifyListeners();
@@ -52,6 +58,47 @@ class CardRepository extends ChangeNotifier {
 
   Future<void> delete(CardModel card) async {
     await card.delete();
+    notifyListeners();
+  }
+
+  /// Migrate legacy data (userId == 0) to the given userId.
+  Future<void> migrateOrphanedData(int userId) async {
+    for (final card in _box.values) {
+      if (card.userId == 0) {
+        card.userId = userId;
+        await card.save();
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Export all cards for a user as a list of maps.
+  List<Map<String, dynamic>> exportForUser(int userId) {
+    return getByUserId(userId).map((c) => {
+      'id': c.id,
+      'name': c.name,
+      'annualFee': c.annualFee,
+      'waiverThreshold': c.waiverThreshold,
+      'cycleStart': c.cycleStart.toIso8601String(),
+      'cycleEnd': c.cycleEnd.toIso8601String(),
+    }).toList();
+  }
+
+  /// Import cards from a list of maps for the given userId.
+  Future<void> importForUser(int userId, List<dynamic> data) async {
+    for (final item in data) {
+      final map = item as Map<String, dynamic>;
+      final card = CardModel(
+        id: _nextId(),
+        name: map['name'] as String,
+        annualFee: (map['annualFee'] as num).toDouble(),
+        waiverThreshold: (map['waiverThreshold'] as num).toDouble(),
+        cycleStart: DateTime.parse(map['cycleStart'] as String),
+        cycleEnd: DateTime.parse(map['cycleEnd'] as String),
+        userId: userId,
+      );
+      await _box.add(card);
+    }
     notifyListeners();
   }
 }

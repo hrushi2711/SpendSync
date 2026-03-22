@@ -23,13 +23,14 @@ class CardModelAdapter extends TypeAdapter<CardModel> {
       waiverThreshold: fields[3] as double,
       cycleStart: fields[4] as DateTime,
       cycleEnd: fields[5] as DateTime,
+      userId: fields[6] as int,
     );
   }
 
   @override
   void write(BinaryWriter writer, CardModel obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -41,7 +42,9 @@ class CardModelAdapter extends TypeAdapter<CardModel> {
       ..writeByte(4)
       ..write(obj.cycleStart)
       ..writeByte(5)
-      ..write(obj.cycleEnd);
+      ..write(obj.cycleEnd)
+      ..writeByte(6)
+      ..write(obj.userId);
   }
 
   @override
